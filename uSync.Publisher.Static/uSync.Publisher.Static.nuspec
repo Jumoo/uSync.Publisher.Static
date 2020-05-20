@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>uSync.Publisher.Static</id>
+    <version>8.0.0</version>
+    <title>uSync Publisher</title>
+    <authors>Kevin Jump</authors>
+    <owners>Jumoo</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Publish your umbraco site as a static thing.</description>
+    <summary></summary>
+    <releaseNotes>
+    </releaseNotes>
+    <dependencies>
+      <dependency id="uSync.ContentEdition" version="8.6.1"/>
+      <dependency id="uSync.Publisher" version="8.6.1"/>
+      <dependency id="Microsoft.AspNet.SignalR.Client" version="2.4.1"/>
+      <dependency id="FluentFTP" version="29.0.3"/>
+      <dependency id="SSH.NET" version="2016.1.0"/>
+    </dependencies>
+    <tags>umbraco usync</tags>
+  </metadata>
+  <files>
+    <file src="bin\$Configuration$\uSync.publisher.static.dll" target="lib\net472" />
+    <file src="readme.txt" target="readme.txt" />
+    <file src="App_Plugins\uSyncPublisher\**\*.*" target="content\App_Plugins\uSyncPublisher" />
+  </files>
+</package>
