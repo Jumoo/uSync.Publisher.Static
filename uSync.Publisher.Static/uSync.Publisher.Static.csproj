@@ -384,7 +384,6 @@
     <Content Include="App_Plugins\uSyncPublisher\services\publisherService.js" />
     <Content Include="App_Plugins\uSyncPublisher\services\publishService.js" />
     <Content Include="App_Plugins\uSyncPublisher\usyncpublish.css" />
-    <None Include="readme.md" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
