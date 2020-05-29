@@ -57,7 +57,7 @@ namespace uSync.Publisher.Static
             this.contextFactory = contextFactory;
 
             this.syncRoot = Path.GetFullPath(Path.Combine(settings.LocalTempPath, "uSync", "pack"));
-            this.configFile = Path.GetFullPath(Path.Combine(Umbraco.Core.IO.SystemDirectories.Config + "/uSync.Publish.config"));
+            this.configFile = Path.Combine(Umbraco.Core.IO.SystemDirectories.Config + "/uSync.Publish.config");
 
             this.deployers = deployers;
 
