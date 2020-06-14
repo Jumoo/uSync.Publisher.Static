@@ -15,6 +15,7 @@ using uSync.Publisher.Configuration;
 using uSync8.BackOffice.Services;
 using uSync8.BackOffice.SyncHandlers;
 using uSync8.Core.Extensions;
+using System.ComponentModel.DataAnnotations;
 
 namespace uSync.Publisher.Static
 {
@@ -57,7 +58,7 @@ namespace uSync.Publisher.Static
             this.contextFactory = contextFactory;
 
             this.syncRoot = Path.GetFullPath(Path.Combine(settings.LocalTempPath, "uSync", "pack"));
-            this.configFile = Path.GetFullPath(Path.Combine(Umbraco.Core.IO.SystemDirectories.Config + "/uSync.Publish.config"));
+            this.configFile = Path.Combine(Umbraco.Core.IO.SystemDirectories.Config + "/uSync.Publish.config");
 
             this.deployers = deployers;
 
@@ -155,38 +156,32 @@ namespace uSync.Publisher.Static
         private XElement LoadDeployerConfig(string serverAlias)
         {
 
-            var settingsFile = IOHelper.MapPath(this.configFile);
-            var node = XElement.Load(settingsFile);
-            var servers = node.Element("servers");
-
-            if (servers != null)
+            var serverConfig = LoadServerConfig(serverAlias);
+            if (serverConfig != null)
             {
-                var server = servers.Elements()
-                    .Where(x => x.Attribute("alias")
-                    .ValueOrDefault(string.Empty).InvariantEquals(serverAlias))
-                    .FirstOrDefault();
-
-                if (server != null)
-                {
-                    return server.Element("deployer");
-                }
+                return serverConfig.Element("deployer");
             }
 
             return null;
+        }
 
-            /*
-            var file = IOHelper.MapPath(this.configFile);
-            if (!File.Exists(file)) return config;
+        internal XElement LoadServerConfig(string serverAlias)
+        {
+            var settingsFile = IOHelper.MapPath(this.configFile);
+            var node = XElement.Load(settingsFile);
 
-            XElement node = XElement.Load(file);
-            var deployer = node.Element(alias);
-            if (deployer == null) return config;
+            var servers = node.Elements("servers");
+            if (servers != null)
+            {
+                var serverNode = servers.Elements()
+                    .Where(x => x.Attribute("alias").ValueOrDefault(string.Empty).InvariantEquals(serverAlias))
+                    .FirstOrDefault();
 
-            config.Server = node.Element("server").ValueOrDefault(string.Empty);
-            config.Username = node.Element("username").ValueOrDefault(string.Empty);
-            config.Password = node.Element("password").ValueOrDefault(string.Empty);
-            config.Location = node.Element("location").ValueOrDefault(string.Empty);
-            */
+                if (serverAlias != null)
+                    return serverNode;
+            }
+
+            return null;
         }
 
         public int GetItemId(Udi udi)

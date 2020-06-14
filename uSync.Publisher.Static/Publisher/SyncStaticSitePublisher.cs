@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using HtmlAgilityPack;
+
+using Umbraco.Core;
 using Umbraco.Core.Configuration;
 using Umbraco.Core.Logging;
 
@@ -14,6 +17,7 @@ using uSync.Publisher.Services;
 
 using uSync8.BackOffice;
 using uSync8.Core.Dependency;
+using uSync8.Core.Extensions;
 
 using static Umbraco.Core.Constants;
 
@@ -42,7 +46,7 @@ namespace uSync.Publisher.Static
         {
             this.outgoingService = outgoingService;
             this.staticSiteService = staticSiteService;
-
+            
             Actions = new Dictionary<PublishMode, IEnumerable<SyncPublisherAction>>()
             {
                 { PublishMode.Push, PushActions }
@@ -87,6 +91,8 @@ namespace uSync.Publisher.Static
 
             if (id == Guid.Empty)
                 id = Guid.NewGuid();
+
+            
 
             var dependencies = outgoingService.GetItemDependencies(args.Options.Items, args.Callbacks);
             MoveToNextStep(action, args);
@@ -148,12 +154,24 @@ namespace uSync.Publisher.Static
         {
             if (args.Options.IncludeFileHash)
             {
-                staticSiteService.SaveFolders(id, new string[]
-                {
-                "~/css", "~/scripts"
-                });
+                staticSiteService.SaveFolders(id, GetFolders(args.Target));
             }
         }
+
+        /// <summary>
+        ///  Get the list of additional folders to copy. 
+        /// </summary>
+        private string[] GetFolders(string serverAlias)
+        {
+            var serverConfig = staticSiteService.LoadServerConfig(serverAlias);
+            if (serverConfig != null)
+            {
+                return serverConfig.Element("Folders").ValueOrDefault("~/css,~/scripts").ToDelimitedList().ToArray();
+            }
+
+            return new string[] { "~/css,~/scripts" };
+        }
+
 
         private void Publish(Guid id, ActionArguments args)
         {
