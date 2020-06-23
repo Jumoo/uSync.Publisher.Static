@@ -11,7 +11,7 @@ namespace uSync.Publisher.Static
             composition.WithCollectionBuilder<SyncStaticDeployerCollectionBuilder>()
                 .Add(() => composition.TypeLoader.GetTypes<ISyncStaticDeployer>());
 
-            composition.RegisterUnique<uSyncStaticSiteService>();
+            composition.RegisterUnique<IuSyncStaticSiteService, uSyncStaticSiteService>();
         }
     }
 }
