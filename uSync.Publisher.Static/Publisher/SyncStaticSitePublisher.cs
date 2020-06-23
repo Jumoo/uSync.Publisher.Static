@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-
+using System.Xml.Linq;
 using HtmlAgilityPack;
 
 using Umbraco.Core;
@@ -28,23 +29,26 @@ namespace uSync.Publisher.Static
     /// </summary>
     public class SyncStaticSitePublisher : SyncStepImportBase, IStepPublisher, IStepPublisherConfig
     {
+        public const string CalculateStepName = "Calculate";
+        public const string CreatePageStepName = "Creating Pages";
+        public const string GatherMediaStepName = "Gathering Media";
+        public const string FilesStepName = "Files";
+        public const string UploadStepName = "Upload";
+
         public string Name => "Static Site Publisher";
         public string Alias => "static";
 
         public string ConfigView => uSyncPublisher.PluginFolder + "publishers/static/serverConfig.html";
 
-        private readonly uSyncOutgoingService outgoingService;
-        private readonly uSyncStaticSiteService staticSiteService;
+        private readonly IuSyncStaticSiteService staticSiteService;
 
         public SyncStaticSitePublisher(uSyncPublisherConfig config,
             IProfilingLogger logger,
             IGlobalSettings settings,
-            uSyncOutgoingService outgoingService,
-            uSyncIncomingService incomingService,            
-            uSyncStaticSiteService staticSiteService)
+            uSyncIncomingService incomingService,
+            IuSyncStaticSiteService staticSiteService)
             : base(config, logger, settings, incomingService)
         {
-            this.outgoingService = outgoingService;
             this.staticSiteService = staticSiteService;
             
             Actions = new Dictionary<PublishMode, IEnumerable<SyncPublisherAction>>()
@@ -70,11 +74,11 @@ namespace uSync.Publisher.Static
             {
                 Steps = new List<SyncPublisherStep>()
                 {
-                    new SyncPublisherStep("Calculate", "icon-science", "Calculating"),
-                    new SyncPublisherStep("Creating Pages", "icon-box", "Files"),
-                    new SyncPublisherStep("Gathering Media", "icon-picture", "Media"),
-                    new SyncPublisherStep("Files", "icon-documents", "Files"),
-                    new SyncPublisherStep("Upload", "icon-truck usync-truck", "Uploading")
+                    new SyncPublisherStep(CalculateStepName, "icon-science", "Calculating"),
+                    new SyncPublisherStep(CreatePageStepName, "icon-box", "Files"),
+                    new SyncPublisherStep(GatherMediaStepName, "icon-picture", "Media"),
+                    new SyncPublisherStep(FilesStepName, "icon-documents", "Files"),
+                    new SyncPublisherStep(UploadStepName, "icon-truck usync-truck", "Uploading")
                 }
             },
             new SyncPublisherAction("result", "Publish Results", new SyncPublisherStep("Publish", "icon-result"), Complete)
@@ -84,7 +88,6 @@ namespace uSync.Publisher.Static
 
         };
 
-
         public async Task<StepActionResult> Publish(Guid id, SyncPublisherAction action, ActionArguments args)
         {
             if (args?.Options == null) throw new ArgumentNullException(nameof(args));
@@ -92,26 +95,33 @@ namespace uSync.Publisher.Static
             if (id == Guid.Empty)
                 id = Guid.NewGuid();
 
-            
+            var serverConfig = staticSiteService.Initialize(id, action, args);
 
-            var dependencies = outgoingService.GetItemDependencies(args.Options.Items, args.Callbacks);
+            var dependencies = staticSiteService.GetDependencies(args.Options.Items, args.Callbacks);
+            staticSiteService.StepCompleted(CalculateStepName);
             MoveToNextStep(action, args);
 
             // generate the razor for all the pages 
             GenerateHtml(dependencies, id, args);
+            staticSiteService.StepCompleted(CreatePageStepName);
             MoveToNextStep(action, args);
 
             // grab all the media that is referenced in all the pages
             GatherMedia(dependencies, id, args);
+            staticSiteService.StepCompleted(GatherMediaStepName);
             MoveToNextStep(action, args);
 
             // get the system files (css/scripts/etc)
-            GatherFiles(dependencies, id, args);
+            GatherFiles(id, args, serverConfig);
+            staticSiteService.StepCompleted(FilesStepName);
             MoveToNextStep(action, args);
 
 
             // put this somewhere 
             Publish(id, args);
+            staticSiteService.StepCompleted(UploadStepName);
+
+            staticSiteService.PushComplete();
 
             return await Task.FromResult(new StepActionResult(true, id, args.Options, Enumerable.Empty<uSyncAction>()));
         }
@@ -125,17 +135,7 @@ namespace uSync.Publisher.Static
 
                 foreach (var item in pages.Select((Page, Index) => new { Page, Index }))
                 {
-                    var pageId = staticSiteService.GetItemId(item.Page.Udi);
-                    if (pageId > 0)
-                    {
-                        args.Callbacks?.Update?.Invoke($"Generating: {item.Page.Name} html", item.Index, count);
-
-                        staticSiteService.SaveHtml(id, pageId);
-                        // var html = staticSiteService.GenerateItemHtml(pageId);
-                        // var path = staticSiteService.GetItemPath(pageId);
-
-                        // save the html at folder / path. 
-                    }
+                    staticSiteService.SaveHtml(id, item.Page.Udi, () => args.Callbacks?.Update?.Invoke($"Generating: {item.Page.Name} html", item.Index, count));
                 }
             }
         }
@@ -150,28 +150,30 @@ namespace uSync.Publisher.Static
             }
         }
 
-        private void GatherFiles(IEnumerable<uSyncDependency> dependencies, Guid id, ActionArguments args)
+        private void GatherFiles(Guid id, ActionArguments args, XElement serverConfig)
         {
             if (args.Options.IncludeFileHash)
             {
-                staticSiteService.SaveFolders(id, GetFolders(args.Target));
+                var copyFolders = GetFolders(serverConfig);
+                var copyFiles = new Dictionary<string, string>();
+                var customFiles = new Dictionary<string, Stream>();
+
+                staticSiteService.SaveFilesAndFolders(id, copyFolders, copyFiles, customFiles);
             }
         }
 
         /// <summary>
         ///  Get the list of additional folders to copy. 
         /// </summary>
-        private string[] GetFolders(string serverAlias)
+        private List<string> GetFolders(XElement serverConfig)
         {
-            var serverConfig = staticSiteService.LoadServerConfig(serverAlias);
             if (serverConfig != null)
             {
-                return serverConfig.Element("Folders").ValueOrDefault("~/css,~/scripts").ToDelimitedList().ToArray();
+                return serverConfig.Element("Folders").ValueOrDefault("~/css,~/scripts").ToDelimitedList().ToList();
             }
 
-            return new string[] { "~/css,~/scripts" };
+            return new List<string> { "~/css,~/scripts" };
         }
-
 
         private void Publish(Guid id, ActionArguments args)
         {
